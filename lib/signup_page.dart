@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'data/dummy_data.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'person.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -14,17 +15,46 @@ class _SignUpPageState extends State<SignUpPage> {
   final _emailCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
   bool _isStudent = true;
+  bool _isLoading = false;
 
-  void _register() {
-    final newPerson = Person(
-      id: _idCtrl.text.trim(),
-      name: _nameCtrl.text.trim(),
-      isStudent: _isStudent,
-      email: _emailCtrl.text.trim(),
-      password: _pwCtrl.text,
-    );
-    users.add(newPerson);
-    Navigator.pop(context); // back to welcome page
+  Future<void> _register() async {
+    setState(() {
+      _isLoading = true; // Show loading indicator
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse("https://aishachaaban.atwebpages.com/api/register.php"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "id": _idCtrl.text.trim(),
+          "name": _nameCtrl.text.trim(),
+          "email": _emailCtrl.text.trim(),
+          "password": _pwCtrl.text,
+          "is_student": _isStudent,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (data['success'] == true) {
+        Navigator.pop(context); // Go back to login page on success
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar( // Show error in UI
+          SnackBar(content: Text('Registration failed: ${data['error']}')),
+        );
+        print('Registration failed: ${data['error']}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar( // Show connection error
+        SnackBar(content: Text('Error connecting to server: $e')),
+      );
+      print('Error connecting to server: $e');
+    } finally {
+      setState(() {
+        _isLoading = false; // Hide loading indicator
+      });
+    }
   }
 
   @override
@@ -90,7 +120,12 @@ class _SignUpPageState extends State<SignUpPage> {
                 obscureText: true
             ),
             const SizedBox(height: 20),
-            ElevatedButton(onPressed: _register, child: const Text('Sign Up')),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _register, // Disable button while loading
+              child: _isLoading
+                  ? CircularProgressIndicator() // Show loading indicator
+                  : const Text('Sign Up'),
+            ),
           ],
         ),
       ),
