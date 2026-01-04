@@ -1,10 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../data/dummy_data.dart';
-import '../models/event.dart';
-import 'package:intl/intl.dart';   // only for formatting the selected date
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({Key? key}) : super(key: key);
+
   @override
   State<AddEventPage> createState() => _AddEventPageState();
 }
@@ -12,43 +13,65 @@ class AddEventPage extends StatefulWidget {
 class _AddEventPageState extends State<AddEventPage> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _imageCtrl = TextEditingController(); // optional asset path
-  DateTime? _date;                            // chosen date
+  final _imageCtrl = TextEditingController();
+  DateTime? _date;
 
-  // ---- pick a date with the built‑in date picker ----
+  bool _loading = false;
+
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: now,
-      firstDate: now.subtract(const Duration(days: 365)),
+      firstDate: now,
       lastDate: now.add(const Duration(days: 365 * 5)),
     );
     if (picked != null) setState(() => _date = picked);
   }
 
-  // ---- save the new event into the global list ----
-  void _save() {
+  Future<void> _saveEvent() async {
     if (_titleCtrl.text.isEmpty ||
         _descCtrl.text.isEmpty ||
         _date == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All fields except image are required')),
+        const SnackBar(content: Text('All fields are required')),
       );
       return;
     }
 
-    final newEvent = Event(
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      imagePath: _imageCtrl.text.isEmpty
-          ? 'assets/default.jpg'          // fallback picture
-          : _imageCtrl.text.trim(),
-      date: _date!,
-    );
+    setState(() => _loading = true);
 
-    events.add(newEvent);       // <-- add to the in‑memory list
-    Navigator.pop(context);     // return to AdminPage
+    try {
+      final response = await http.post(
+        Uri.parse('https://aishachaaban.atwebpages.com/api/add_event.php'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'title': _titleCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'image_path': _imageCtrl.text.trim().isEmpty
+              ? 'default.jpg'
+              : _imageCtrl.text.trim(),
+          'event_date': DateFormat('yyyy-MM-dd').format(_date!),
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Event added successfully')),
+        );
+        Navigator.pop(context, true);
+      } else {
+        throw Exception(data['message'] ?? 'Failed to add event');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+
+    setState(() => _loading = false);
   }
 
   @override
@@ -56,46 +79,47 @@ class _AddEventPageState extends State<AddEventPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blue[900],
+        centerTitle: true,
         title: const Text(
           'Add New Event',
           style: TextStyle(
-            fontSize: 28,
+            fontSize: 26,
             fontWeight: FontWeight.bold,
             color: Colors.yellow,
           ),
         ),
-        centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const SizedBox(height: 12),
           TextField(
-              controller: _titleCtrl,
-              style: const TextStyle(fontSize: 18.0),
-              decoration: const InputDecoration(
-                  border: OutlineInputBorder(), hintText: 'Title'
-              )
+            controller: _titleCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Title',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
+
           TextField(
-              controller: _descCtrl,
-              style: const TextStyle(fontSize: 18.0),
-              decoration: const InputDecoration(
-                  border: OutlineInputBorder(), hintText: 'Description'
-              )
+            controller: _descCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Description',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
+
           TextField(
-              controller: _imageCtrl,
-              style: const TextStyle(fontSize: 18.0),
-              decoration: const InputDecoration(
-                  labelText: 'Image asset path (optional)',
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g. assets/event1.jpg'
-              )
+            controller: _imageCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Image file name',
+              hintText: 'example.jpg',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
+
           Row(
             children: [
               Expanded(
@@ -111,11 +135,14 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
             ],
           ),
+
           const SizedBox(height: 20),
 
           ElevatedButton(
-            onPressed: _save,
-            child: const Text('Save Event'),
+            onPressed: _loading ? null : _saveEvent,
+            child: _loading
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text('Save Event'),
           ),
         ],
       ),
