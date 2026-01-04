@@ -1,14 +1,30 @@
 class Event {
+  final int id;
   final String title;
   final String description;
-  final String imagePath; // e.g. 'assets/event1.jpg'
-  final DateTime date;    // used for week filtering
-  final List<String> participants = []; // list of user IDs
+  final String eventDate;
+  final String image;
+  final List<int> participants;
 
   Event({
+    required this.id,
     required this.title,
     required this.description,
-    required this.imagePath,
-    required this.date,
+    required this.eventDate,
+    required this.image,
+    required this.participants,
   });
+
+  factory Event.fromJson(Map<String, dynamic> json) {
+    return Event(
+      id: int.parse(json['id'].toString()),
+      title: json['title'],
+      description: json['description'],
+      eventDate: json['event_date'],
+      image: json['image'],
+      participants: (json['participants'] as List)
+          .map((p) => int.parse(p.toString()))
+          .toList(),
+    );
+  }
 }
